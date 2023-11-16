@@ -24,7 +24,7 @@ class SimpleDatabase:
         try:
             if table_name in self.tables:
                 df = self.tables[table_name]
-                df = df.append(pd.DataFrame(data), ignore_index=True)
+                df = df.append(pd.DataFrame.from_records([data]), ignore_index=True)
                 self.tables[table_name] = df
                 self.save_table_to_csv(table_name)
                 print(f"Data inserted into '{table_name}' successfully.")
@@ -107,9 +107,8 @@ class SimpleDatabase:
         print("'insert' - Insert data into a table")
         print("'delete' - Delete data from a table")
         print("'update' - Update data in a table")
+        print("'query' - Query data from a table")
         print("'exit' - Quit the program")
-        print("For querying:")
-        print("Enter the table name, conditions, columns, and aggregation details as prompted.")
 
 # Example Usage
 db = SimpleDatabase()
@@ -119,13 +118,15 @@ db.load_all_tables_from_csv()
 
 # Command-line interface
 while True:
-    try:
-        user_input = input("\nEnter table name or command ('help' for more help, 'exit' to quit): ")
+    while True:
+        user_input = input("\nEnter command ('help' for more help, 'exit' to quit): ")
 
         if user_input.lower() == 'exit':
             break
         elif user_input.lower() == 'tables':
-            print("\nAvailable Tables:", list(db.tables.keys()))
+            print("\nAvailable Tables:")
+            for key in db.tables.keys():
+                print(key)
         elif user_input.lower() == 'help':
             db.display_help()
         elif user_input.lower() == 'insert':
@@ -149,10 +150,10 @@ while True:
                 db.update_data(table_name, conditions, update_values)
             except ValueError as e:
                 print(f"Error updating data: {str(e)}")
-        else:
-            table_name = user_input
-
-            conditions = input("Enter conditions for querying (e.g., 'player == \"Tyrese Maxey\" and 'season == 2024' or press Enter for all rows): ")
+        elif user_input.lower() == 'query':
+            table_name = input("Enter the table name: ")
+            conditions = input("Enter conditions for querying "
+                               "(e.g., 'player == \"Tyrese Maxey\" and 'season == 2024' or press Enter for all rows): ")
             columns_input = input("Enter columns to retrieve (comma-separated, or press Enter for all columns): ")
             aggregation_input = input("Enter aggregation details (e.g., 'group_by: Season, aggregations: mean(Score), sum(Attempts)'; press Enter for no aggregation): ")
 
@@ -172,5 +173,5 @@ while True:
                     print(row)
             else:
                 print(result)
-    except Exception as e:
-        print(f"An error occurred: {str(e)}. Please try again.")
+        else:
+                print("Invalid Command")
