@@ -6,12 +6,24 @@ class SimpleDatabase:
         self.tables = {}
         self.data_directory = data_directory
 
-    def load_all_tables_from_csv(self):
-        for file_name in os.listdir(self.data_directory):
-            if file_name.endswith('.csv'):
+    def load_all_tables_from_csv_in_batches(self, batch_size=1000):
+        files = [file_name for file_name in os.listdir(self.data_directory) if file_name.endswith('.csv')]
+
+        for i in range(0, len(files), batch_size):
+            batch_files = files[i:i + batch_size]
+            batch_tables = {}
+
+            for file_name in batch_files:
                 table_name = os.path.splitext(file_name)[0]
                 file_path = os.path.join(self.data_directory, file_name)
-                self.load_table_from_csv(table_name, file_path)
+                batch_tables[table_name] = pd.read_csv(file_path)
+
+            # Update tables in memory
+            self.tables.update(batch_tables)
+
+            # Save tables to disk after processing each batch
+            for table_name in batch_tables:
+                self.save_table_to_csv(table_name)
 
     def load_table_from_csv(self, table_name, file_path):
         try:
@@ -19,7 +31,6 @@ class SimpleDatabase:
             self.tables[table_name] = df
         except FileNotFoundError:
             print(f"Error: File '{file_path}' not found.")
-
     def insert_data(self, table_name, data):
         try:
             if table_name in self.tables:
@@ -110,13 +121,10 @@ class SimpleDatabase:
         print("'query' - Query data from a table")
         print("'exit' - Quit the program")
 
-# Example Usage
 db = SimpleDatabase()
 
-# Load all tables from CSV files in the current directory
-db.load_all_tables_from_csv()
+db.load_all_tables_from_csv_in_batches()
 
-# Command-line interface
 while True:
     while True:
         user_input = input("\nEnter command ('help' for more help, 'exit' to quit): ")
