@@ -31,11 +31,18 @@ class SimpleDatabase:
             self.tables[table_name] = df
         except FileNotFoundError:
             print(f"Error: File '{file_path}' not found.")
+
     def insert_data(self, table_name, data):
         try:
             if table_name in self.tables:
                 df = self.tables[table_name]
-                df = df.append(pd.DataFrame.from_records([data]), ignore_index=True)
+
+                # Convert data to a list (assuming data is a comma-separated string)
+                data_list = data.split(',')
+
+                # Append the new row to the DataFrame
+                df.loc[len(df)] = data_list
+
                 self.tables[table_name] = df
                 self.save_table_to_csv(table_name)
                 print(f"Data inserted into '{table_name}' successfully.")
@@ -44,30 +51,51 @@ class SimpleDatabase:
         except Exception as e:
             print(f"Error inserting data into '{table_name}': {str(e)}")
 
-    def delete_data(self, table_name, conditions):
+    def save_table_to_csv(self, table_name):
         try:
-            if table_name in self.tables:
-                df = self.tables[table_name]
-                if conditions:
-                    df = df.query(conditions)
-                self.tables[table_name] = df
-                self.save_table_to_csv(table_name)
-                print(f"Data deleted from '{table_name}' successfully.")
-            else:
+            # Check if the table exists
+            if table_name not in self.tables:
                 print(f"Table '{table_name}' does not exist.")
+                return
+
+            # Get the DataFrame
+            df = self.tables[table_name]
+
+            # Save the DataFrame to a temporary CSV file using os
+            temp_file = os.path.join(self.data_directory, f"{table_name}_temp.csv")
+            df.to_csv(temp_file, index=False)
+
+            # Remove the original file and rename the temporary file using os
+            original_file = os.path.join(self.data_directory, f"{table_name}.csv")
+            os.remove(original_file)
+            os.rename(temp_file, original_file)
+
+            print(f"Data saved to '{table_name}.csv' successfully.")
         except Exception as e:
-            print(f"Error deleting data from '{table_name}': {str(e)}")
+            print(f"Error saving data to '{table_name}.csv': {str(e)}")
 
     def update_data(self, table_name, conditions, update_values):
         try:
             if table_name in self.tables:
                 df = self.tables[table_name]
+
+                # Apply conditions
                 if conditions:
                     df = df.query(conditions)
+
                 if not df.empty:
-                    df.update(pd.DataFrame(update_values))
-                    self.tables[table_name] = df
+                    # Convert update_values to a dictionary
+                    update_dict = dict(zip(df.columns, map(str.strip, update_values.split(','))))
+
+                    # Update the DataFrame
+                    df = df.assign(**update_dict)
+
+                    # Update the original DataFrame with the changes
+                    self.tables[table_name].update(df)
+
+                    # Save the updated DataFrame to CSV
                     self.save_table_to_csv(table_name)
+
                     print(f"Data updated in '{table_name}' successfully.")
                 else:
                     print("No matching rows found.")
@@ -75,6 +103,36 @@ class SimpleDatabase:
                 print(f"Table '{table_name}' does not exist.")
         except Exception as e:
             print(f"Error updating data in '{table_name}': {str(e)}")
+
+    def delete_data(self, table_name, conditions):
+        try:
+            if table_name in self.tables:
+                df = self.tables[table_name]
+
+                # Apply conditions
+                if conditions:
+                    df = df.query(conditions)
+
+                if not df.empty:
+                    # Remove the matching rows from the DataFrame
+                    df = df[~df.index.isin(df.query(conditions).index)]
+
+                    # Save the updated DataFrame to a CSV file using os
+                    temp_file = os.path.join(self.data_directory, f"{table_name}_temp.csv")
+                    df.to_csv(temp_file, index=False)
+
+                    # Remove the original file and rename the temporary file using os
+                    original_file = os.path.join(self.data_directory, f"{table_name}.csv")
+                    os.remove(original_file)
+                    os.rename(temp_file, original_file)
+
+                    print(f"Data deleted from '{table_name}' successfully.")
+                else:
+                    print("No matching rows found.")
+            else:
+                print(f"Table '{table_name}' does not exist.")
+        except Exception as e:
+            print(f"Error deleting data from '{table_name}': {str(e)}")
 
     def save_table_to_csv(self, table_name):
         file_path = os.path.join(self.data_directory, f"{table_name}.csv")
@@ -112,13 +170,34 @@ class SimpleDatabase:
             print(f"Error processing query: {str(e)}")
             return None
 
+    def create_file(self, table_name, data=None):
+        try:
+            # Check if the table already exists
+            if table_name not in self.tables:
+                # Create an empty DataFrame
+                df = pd.DataFrame()
+
+                # Save the empty DataFrame to a CSV file
+                file_path = os.path.join(self.data_directory, f"{table_name}.csv")
+                df.to_csv(file_path, index=False)
+
+                # Update tables in memory
+                self.tables[table_name] = df
+
+                print(f"File '{table_name}.csv' created successfully.")
+            else:
+                print(f"Table '{table_name}' already exists. Choose a different name.")
+        except Exception as e:
+            print(f"Error creating file: {str(e)}")
+
     def display_help(self):
         print("\nAvailable Commands:")
         print("'tables' - See available tables")
         print("'insert' - Insert data into a table")
         print("'delete' - Delete data from a table")
-        print("'update' - Update data in a table")
+        print("'update' - Update entire row of data in a table")
         print("'query' - Query data from a table")
+        print("'create' - Create a new file")
         print("'exit' - Quit the program")
 
 db = SimpleDatabase()
@@ -139,12 +218,11 @@ while True:
             db.display_help()
         elif user_input.lower() == 'insert':
             table_name = input("Enter the table name: ")
-            data_input = input("Enter data for the table in JSON format: ")
+            data_input = input("Enter data for the table (comma-separated): ")
             try:
-                data = pd.read_json(data_input).to_dict('records')
-                db.insert_data(table_name, data)
+                db.insert_data(table_name, data_input)
             except ValueError as e:
-                print(f"Error inserting data: {str(e)}")
+                print(f"Error appending data: {str(e)}")
         elif user_input.lower() == 'delete':
             table_name = input("Enter the table name: ")
             conditions = input("Enter conditions for deleting data (e.g., 'player == \"Tyrese Maxey\"'): ")
@@ -152,10 +230,9 @@ while True:
         elif user_input.lower() == 'update':
             table_name = input("Enter the table name: ")
             conditions = input("Enter conditions for updating data (e.g., 'player == \"Tyrese Maxey\"'): ")
-            update_input = input("Enter data to update in JSON format: ")
+            update_input = input("Enter data to update (comma-separated): ")
             try:
-                update_values = pd.read_json(update_input).to_dict('records')[0]
-                db.update_data(table_name, conditions, update_values)
+                db.update_data(table_name, conditions, update_input)
             except ValueError as e:
                 print(f"Error updating data: {str(e)}")
         elif user_input.lower() == 'query':
@@ -181,5 +258,8 @@ while True:
                     print(row)
             else:
                 print(result)
+        elif user_input.lower() == 'create':
+            table_name = input("Enter the table name for the new file: ")
+            db.create_file(table_name)
         else:
                 print("Invalid Command")
